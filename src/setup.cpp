@@ -4,7 +4,7 @@
 
 #ifdef BENCHMARK
 #include "info.hpp"
-void main_setup() { // benchmark; required extensions in defines.hpp: BENCHMARK, optionally FP16S or FP16C
+/*void main_setup() { // benchmark; required extensions in defines.hpp: BENCHMARK, optionally FP16S or FP16C
 	// ################################################################## define simulation box size, viscosity and volume force ###################################################################
 	uint mlups = 0u; {
 
@@ -592,7 +592,7 @@ void main_setup() { // benchmark; required extensions in defines.hpp: BENCHMARK,
 
 
 
-/*void main_setup() { // aerodynamics of a cow; required extensions in defines.hpp: FP16S, EQUILIBRIUM_BOUNDARIES, SUBGRID, INTERACTIVE_GRAPHICS or GRAPHICS
+void main_setup() { // aerodynamics of a cow; required extensions in defines.hpp: FP16S, FORCE_FIELD, EQUILIBRIUM_BOUNDARIES, SUBGRID, INTERACTIVE_GRAPHICS or GRAPHICS
 	// ################################################################## define simulation box size, viscosity and volume force ###################################################################
 	const uint3 lbm_N = resolution(float3(1.0f, 2.0f, 1.0f), 1000u); // input: simulation box aspect ratio and VRAM occupation in MB, output: grid resolution
 	const float si_u = 1.0f;
@@ -610,28 +610,42 @@ void main_setup() { // benchmark; required extensions in defines.hpp: BENCHMARK,
 	const float3x3 rotation = float3x3(float3(1, 0, 0), radians(180.0f))*float3x3(float3(0, 0, 1), radians(180.0f));
 	Mesh* mesh = read_stl(get_exe_path()+"../stl/Cow_t.stl", lbm.size(), lbm.center(), rotation, lbm_length); // https://www.thingiverse.com/thing:182114/files
 	mesh->translate(float3(0.0f, 1.0f-mesh->pmin.y+0.1f*lbm_length, 1.0f-mesh->pmin.z)); // move mesh forward a bit and to simulation box bottom, keep in mind 1 cell thick box boundaries
-	lbm.voxelize_mesh_on_device(mesh);
+	lbm.voxelize_mesh_on_device(mesh, TYPE_S|TYPE_X);
 	const uint Nx=lbm.get_Nx(), Ny=lbm.get_Ny(), Nz=lbm.get_Nz(); parallel_for(lbm.get_N(), [&](ulong n) { uint x=0u, y=0u, z=0u; lbm.coordinates(n, x, y, z);
 		if(z==0u) lbm.flags[n] = TYPE_S; // solid floor
 		if(lbm.flags[n]!=TYPE_S) lbm.u.y[n] = lbm_u; // initialize y-velocity everywhere except in solid cells
 		if(x==0u||x==Nx-1u||y==0u||y==Ny-1u||z==Nz-1u) lbm.flags[n] = TYPE_E; // all other simulation box boundaries are inflow/outflow
 	}); // ####################################################################### run simulation, export images and data ##########################################################################
 	lbm.graphics.visualization_modes = VIS_FLAG_SURFACE|VIS_Q_CRITERION;
-#if defined(GRAPHICS) && !defined(INTERACTIVE_GRAPHICS)
+	const float3 com = lbm.object_center_of_mass(TYPE_S|TYPE_X);
+	const string csv = get_exe_path()+"export/rb_state.csv";
+	write_file(csv, "step,si_time,force_x,force_y,force_z,torque_x,torque_y,torque_z\n"); // forces in [N], torques in [N*m], time in [s]
+#if defined(INTERACTIVE_GRAPHICS) || defined(INTERACTIVE_GRAPHICS_ASCII)
+	lbm.run(); // interactive mode: rendering thread requires lbm.run() to control its lifetime
+#elif defined(GRAPHICS) // batch graphics: write frames and log
 	lbm.graphics.set_camera_centered(-40.0f, 20.0f, 78.0f, 1.25f);
 	lbm.run(0u, lbm_T); // initialize simulation
 	while(lbm.get_t()<=lbm_T) { // main simulation loop
 		if(lbm.graphics.next_frame(lbm_T, 10.0f)) lbm.graphics.write_frame();
 		lbm.run(1u, lbm_T);
+		const float3 f = lbm.object_force(TYPE_S|TYPE_X);
+		const float3 tq = lbm.object_torque(com, TYPE_S|TYPE_X);
+		write_line(csv, to_string(lbm.get_t())+","+to_string(units.si_t(lbm.get_t()))+","+to_string(units.si_F(f.x))+","+to_string(units.si_F(f.y))+","+to_string(units.si_F(f.z))+","+to_string(units.si_M(tq.x))+","+to_string(units.si_M(tq.y))+","+to_string(units.si_M(tq.z))+"\n");
 	}
-#else // GRAPHICS && !INTERACTIVE_GRAPHICS
-	lbm.run();
-#endif // GRAPHICS && !INTERACTIVE_GRAPHICS
+#else // no graphics: log without rendering
+	lbm.run(0u, lbm_T); // initialize simulation
+	while(lbm.get_t()<=lbm_T) { // main simulation loop
+		lbm.run(1u, lbm_T);
+		const float3 f = lbm.object_force(TYPE_S|TYPE_X);
+		const float3 tq = lbm.object_torque(com, TYPE_S|TYPE_X);
+		write_line(csv, to_string(lbm.get_t())+","+to_string(units.si_t(lbm.get_t()))+","+to_string(units.si_F(f.x))+","+to_string(units.si_F(f.y))+","+to_string(units.si_F(f.z))+","+to_string(units.si_M(tq.x))+","+to_string(units.si_M(tq.y))+","+to_string(units.si_M(tq.z))+"\n");
+	}
+#endif
 } /**/
 
 
 
-/*void main_setup() { // Space Shuttle; required extensions in defines.hpp: FP16S, EQUILIBRIUM_BOUNDARIES, SUBGRID, INTERACTIVE_GRAPHICS or GRAPHICS
+/*void main_setup() { // Space Shuttle; required extensions in defines.hpp: FP16S, FORCE_FIELD, EQUILIBRIUM_BOUNDARIES, SUBGRID, INTERACTIVE_GRAPHICS or GRAPHICS
 	// ################################################################## define simulation box size, viscosity and volume force ###################################################################
 	const uint3 lbm_N = resolution(float3(1.0f, 4.0f, 0.8f), 1000u); // input: simulation box aspect ratio and VRAM occupation in MB, output: grid resolution
 	const float lbm_Re = 10000000.0f;
@@ -643,14 +657,21 @@ void main_setup() { // benchmark; required extensions in defines.hpp: BENCHMARK,
 	const float3 center = float3(lbm.center().x, 0.55f*size, lbm.center().z+0.05f*size);
 	const float3x3 rotation = float3x3(float3(1, 0, 0), radians(-20.0f))*float3x3(float3(0, 0, 1), radians(270.0f));
 	Clock clock;
-	lbm.voxelize_stl(get_exe_path()+"../stl/Full_Shuttle.stl", center, rotation, size); // https://www.thingiverse.com/thing:4975964/files
+	lbm.voxelize_stl(get_exe_path()+"../stl/Full_Shuttle.stl", center, rotation, size, TYPE_S|TYPE_X); // https://www.thingiverse.com/thing:4975964/files
 	println(print_time(clock.stop()));
 	const uint Nx=lbm.get_Nx(), Ny=lbm.get_Ny(), Nz=lbm.get_Nz(); parallel_for(lbm.get_N(), [&](ulong n) { uint x=0u, y=0u, z=0u; lbm.coordinates(n, x, y, z);
 		if(lbm.flags[n]!=TYPE_S) lbm.u.y[n] = lbm_u;
 		if(x==0u||x==Nx-1u||y==0u||y==Ny-1u||z==0u||z==Nz-1u) lbm.flags[n] = TYPE_E; // all non periodic
 	}); // ####################################################################### run simulation, export images and data ##########################################################################
 	lbm.graphics.visualization_modes = VIS_FLAG_LATTICE|VIS_FLAG_SURFACE|VIS_Q_CRITERION;
-#if defined(GRAPHICS) && !defined(INTERACTIVE_GRAPHICS)
+	const float3 com = lbm.object_center_of_mass(TYPE_S|TYPE_X);
+	const string csv = get_exe_path()+"export/rb_state.csv";
+	write_file(csv, "step,force_x,force_y,force_z,torque_x,torque_y,torque_z\n"); // forces and torques in LBM units
+#if defined(INTERACTIVE_GRAPHICS) || defined(INTERACTIVE_GRAPHICS_ASCII)
+	lbm.write_status();
+	lbm.run(); // interactive mode: rendering thread requires lbm.run() to control its lifetime
+	lbm.write_status();
+#elif defined(GRAPHICS) // batch graphics: write frames and log
 	lbm.write_status();
 	lbm.run(0u, lbm_T); // initialize simulation
 	while(lbm.get_t()<=lbm_T) { // main simulation loop
@@ -661,11 +682,21 @@ void main_setup() { // benchmark; required extensions in defines.hpp: BENCHMARK,
 			lbm.graphics.write_frame(get_exe_path()+"export/bottom/");
 		}
 		lbm.run(1u, lbm_T);
+		const float3 f = lbm.object_force(TYPE_S|TYPE_X);
+		const float3 tq = lbm.object_torque(com, TYPE_S|TYPE_X);
+		write_line(csv, to_string(lbm.get_t())+","+to_string(f.x)+","+to_string(f.y)+","+to_string(f.z)+","+to_string(tq.x)+","+to_string(tq.y)+","+to_string(tq.z)+"\n");
 	}
 	lbm.write_status();
-#else // GRAPHICS && !INTERACTIVE_GRAPHICS
-	lbm.run();
-#endif // GRAPHICS && !INTERACTIVE_GRAPHICS
+#else // no graphics: log without rendering
+	lbm.run(0u, lbm_T); // initialize simulation
+	while(lbm.get_t()<=lbm_T) { // main simulation loop
+		lbm.run(1u, lbm_T);
+		const float3 f = lbm.object_force(TYPE_S|TYPE_X);
+		const float3 tq = lbm.object_torque(com, TYPE_S|TYPE_X);
+		write_line(csv, to_string(lbm.get_t())+","+to_string(f.x)+","+to_string(f.y)+","+to_string(f.z)+","+to_string(tq.x)+","+to_string(tq.y)+","+to_string(tq.z)+"\n");
+	}
+	lbm.write_status();
+#endif
 } /**/
 
 

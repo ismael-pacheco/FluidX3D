@@ -3,3 +3,6 @@ temp/
 stl/
 .vs/
 FluidX3D.vcxproj.user
+*.stl
+*.png
+*.mp4
