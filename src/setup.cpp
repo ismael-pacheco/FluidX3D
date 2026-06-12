@@ -591,13 +591,13 @@
 } /**/
 
 
-
+/*
 void main_setup() { // aerodynamics of a cow; required extensions in defines.hpp: FP16S, FORCE_FIELD, EQUILIBRIUM_BOUNDARIES, SUBGRID, INTERACTIVE_GRAPHICS or GRAPHICS
 	// ################################################################## define simulation box size, viscosity and volume force ###################################################################
 	const uint3 lbm_N = resolution(float3(1.0f, 2.0f, 1.0f), 1000u); // input: simulation box aspect ratio and VRAM occupation in MB, output: grid resolution
 	const float si_u = 1.0f;
 	const float si_length = 2.4f;
-	const float si_T = 10.0f;
+	const float si_T = 10.0f;//Simulation time limit, 10s
 	const float si_nu=1.48E-5f, si_rho=1.225f;
 	const float lbm_length = 0.65f*(float)lbm_N.y;
 	const float lbm_u = 0.075f;
@@ -618,19 +618,19 @@ void main_setup() { // aerodynamics of a cow; required extensions in defines.hpp
 	}); // ####################################################################### run simulation, export images and data ##########################################################################
 	lbm.graphics.visualization_modes = VIS_FLAG_SURFACE|VIS_Q_CRITERION;
 	const float3 com = lbm.object_center_of_mass(TYPE_S|TYPE_X);
-	const string csv = get_exe_path()+"export/rb_state.csv";
-	write_file(csv, "step,si_time,force_x,force_y,force_z,torque_x,torque_y,torque_z\n"); // forces in [N], torques in [N*m], time in [s]
+	const string csv = get_exe_path()+"export/rb_state.csv";//CSV file name, directory
+	write_file(csv, "step,si_time,force_x,force_y,force_z,torque_x,torque_y,torque_z\n"); //CSV file header and initialization: forces in [N], torques in [N*m], time in [s]
 #if defined(INTERACTIVE_GRAPHICS) || defined(INTERACTIVE_GRAPHICS_ASCII)
 	lbm.run(); // interactive mode: rendering thread requires lbm.run() to control its lifetime
 #elif defined(GRAPHICS) // batch graphics: write frames and log
 	lbm.graphics.set_camera_centered(-40.0f, 20.0f, 78.0f, 1.25f);
 	lbm.run(0u, lbm_T); // initialize simulation
 	while(lbm.get_t()<=lbm_T) { // main simulation loop
-		if(lbm.graphics.next_frame(lbm_T, 10.0f)) lbm.graphics.write_frame();
+		if(lbm.graphics.next_frame(lbm_T, 10.0f)) lbm.graphics.write_frame(); //Export png frames of the simulation
 		lbm.run(1u, lbm_T);
-		const float3 f = lbm.object_force(TYPE_S|TYPE_X);
-		const float3 tq = lbm.object_torque(com, TYPE_S|TYPE_X);
-		write_line(csv, to_string(lbm.get_t())+","+to_string(units.si_t(lbm.get_t()))+","+to_string(units.si_F(f.x))+","+to_string(units.si_F(f.y))+","+to_string(units.si_F(f.z))+","+to_string(units.si_M(tq.x))+","+to_string(units.si_M(tq.y))+","+to_string(units.si_M(tq.z))+"\n");
+		const float3 f = lbm.object_force(TYPE_S|TYPE_X);//Get forces applied to the object
+		const float3 tq = lbm.object_torque(com, TYPE_S|TYPE_X); //Get torques applied to the object
+		write_line(csv, to_string(lbm.get_t())+","+to_string(units.si_t(lbm.get_t()))+","+to_string(units.si_F(f.x))+","+to_string(units.si_F(f.y))+","+to_string(units.si_F(f.z))+","+to_string(units.si_M(tq.x))+","+to_string(units.si_M(tq.y))+","+to_string(units.si_M(tq.z))+"\n");//Write sim step, time, forces and torques to CSV for logging
 	}
 #else // no graphics: log without rendering
 	lbm.run(0u, lbm_T); // initialize simulation
@@ -645,28 +645,44 @@ void main_setup() { // aerodynamics of a cow; required extensions in defines.hpp
 
 
 
-/*void main_setup() { // Space Shuttle; required extensions in defines.hpp: FP16S, FORCE_FIELD, EQUILIBRIUM_BOUNDARIES, SUBGRID, INTERACTIVE_GRAPHICS or GRAPHICS
+void main_setup() { // Space Shuttle; required extensions in defines.hpp: FP16S, FORCE_FIELD, EQUILIBRIUM_BOUNDARIES, SUBGRID, INTERACTIVE_GRAPHICS or GRAPHICS
 	// ################################################################## define simulation box size, viscosity and volume force ###################################################################
-	const uint3 lbm_N = resolution(float3(1.0f, 4.0f, 0.8f), 1000u); // input: simulation box aspect ratio and VRAM occupation in MB, output: grid resolution
-	const float lbm_Re = 10000000.0f;
-	const float lbm_u = 0.075f;
-	const ulong lbm_T = 108000ull;
-	LBM lbm(lbm_N, 2u, 4u, 1u, units.nu_from_Re(lbm_Re, (float)lbm_N.x, lbm_u)); // run on 2x4x1 = 8 GPUs
+	const uint3 lbm_N = resolution(float3(1.0f, 4.0f, 2.0f), 1000u); // input: simulation box aspect ratio and VRAM occupation in MB, output: grid resolution
+	const float lbm_Re = 10000000.0f; //Reynolds number, high number means high turbulence. Don't really need it if i use nu
+
+	const float si_u = 30.0f; //Flowspeed, [m/s], SI
+	const float si_length = 0.831426f; //Characteristic length of the drone, [m], SI
+	const float si_T = 1.5f; //Simulation time, [s], SI
+	const float si_nu = 0.0000010023f; //Kinematic viscocity, [m²/s], SI
+	const float si_rho = 1000.f; //Air density, [kg/m³], SI
+	
+	const float lbm_length = 1.0f*(float)lbm_N.x; //Drone spans full X width of the box
+	const float lbm_u = 0.075f; //Better to keep this as is
+
+	units.set_m_kg_s(lbm_length, lbm_u, 1.0f, si_length, si_u, si_rho); //Conversion table, so to speak
+	const float lbm_nu = units.nu(si_nu); //Conversion, m²/s to LBM units
+	const ulong lbm_T = units.t(si_T); // Conversion, s to time steps
+	print_info("Re = "+to_string(to_uint(units.si_Re(si_length,si_u,si_nu)))); //Sanity check print info
+
+	
+	LBM lbm(lbm_N, 1u, 1u, 1u, lbm_nu); //Pass lbm_nu instead of nu_from_Re
+	
 	// ###################################################################################### define geometry ######################################################################################
-	const float size = 1.25f*lbm.size().x;
+	const float size = 1.f*lbm.size().x;
 	const float3 center = float3(lbm.center().x, 0.55f*size, lbm.center().z+0.05f*size);
-	const float3x3 rotation = float3x3(float3(1, 0, 0), radians(-20.0f))*float3x3(float3(0, 0, 1), radians(270.0f));
+	const float3x3 rotation = float3x3(float3(1, 0, 0), radians(0.0f))*float3x3(float3(0, 0, 1), radians(180.0f));
 	Clock clock;
-	lbm.voxelize_stl(get_exe_path()+"../stl/Full_Shuttle.stl", center, rotation, size, TYPE_S|TYPE_X); // https://www.thingiverse.com/thing:4975964/files
+	lbm.voxelize_stl(get_exe_path()+"../stl/Retracted_Props.STL", center, rotation, size, TYPE_S|TYPE_X); // https://www.thingiverse.com/thing:4975964/files
 	println(print_time(clock.stop()));
 	const uint Nx=lbm.get_Nx(), Ny=lbm.get_Ny(), Nz=lbm.get_Nz(); parallel_for(lbm.get_N(), [&](ulong n) { uint x=0u, y=0u, z=0u; lbm.coordinates(n, x, y, z);
-		if(lbm.flags[n]!=TYPE_S) lbm.u.y[n] = lbm_u;
-		if(x==0u||x==Nx-1u||y==0u||y==Ny-1u||z==0u||z==Nz-1u) lbm.flags[n] = TYPE_E; // all non periodic
+		if(lbm.flags[n]!=TYPE_S) lbm.u.y[n] = lbm_u; //Initial freestream velocity in Y for non-solid cells
+		if(x==0u||x==Nx-1u||y==0u||y==Ny-1u||z==0u||z==Nz-1u) lbm.flags[n] = TYPE_E; // Domain faces as equilibrium boundaries, all non periodic
 	}); // ####################################################################### run simulation, export images and data ##########################################################################
 	lbm.graphics.visualization_modes = VIS_FLAG_LATTICE|VIS_FLAG_SURFACE|VIS_Q_CRITERION;
 	const float3 com = lbm.object_center_of_mass(TYPE_S|TYPE_X);
-	const string csv = get_exe_path()+"export/rb_state.csv";
-	write_file(csv, "step,force_x,force_y,force_z,torque_x,torque_y,torque_z\n"); // forces and torques in LBM units
+	char csv_speed_buf[32]; sprintf(csv_speed_buf, "%g", si_u);
+	const string csv = get_exe_path()+"export/rb_state_"+replace(string(csv_speed_buf), ".", "_")+"m_s.csv";
+	write_file(csv, "step,si_time,force_x,force_y,force_z,torque_x,torque_y,torque_z\n"); // forces and torques in SI units
 #if defined(INTERACTIVE_GRAPHICS) || defined(INTERACTIVE_GRAPHICS_ASCII)
 	lbm.write_status();
 	lbm.run(); // interactive mode: rendering thread requires lbm.run() to control its lifetime
@@ -684,7 +700,7 @@ void main_setup() { // aerodynamics of a cow; required extensions in defines.hpp
 		lbm.run(1u, lbm_T);
 		const float3 f = lbm.object_force(TYPE_S|TYPE_X);
 		const float3 tq = lbm.object_torque(com, TYPE_S|TYPE_X);
-		write_line(csv, to_string(lbm.get_t())+","+to_string(f.x)+","+to_string(f.y)+","+to_string(f.z)+","+to_string(tq.x)+","+to_string(tq.y)+","+to_string(tq.z)+"\n");
+		write_line(csv, to_string(lbm.get_t())+","+to_string(units.si_t(lbm.get_t()))+","+to_string(units.si_F(f.x))+","+to_string(units.si_F(f.y))+","+to_string(units.si_F(f.z))+","+to_string(units.si_M(tq.x))+","+to_string(units.si_M(tq.y))+","+to_string(units.si_M(tq.z))+"\n");
 	}
 	lbm.write_status();
 #else // no graphics: log without rendering
@@ -693,7 +709,308 @@ void main_setup() { // aerodynamics of a cow; required extensions in defines.hpp
 		lbm.run(1u, lbm_T);
 		const float3 f = lbm.object_force(TYPE_S|TYPE_X);
 		const float3 tq = lbm.object_torque(com, TYPE_S|TYPE_X);
-		write_line(csv, to_string(lbm.get_t())+","+to_string(f.x)+","+to_string(f.y)+","+to_string(f.z)+","+to_string(tq.x)+","+to_string(tq.y)+","+to_string(tq.z)+"\n");
+		write_line(csv, to_string(lbm.get_t())+","+to_string(units.si_t(lbm.get_t()))+","+to_string(units.si_F(f.x))+","+to_string(units.si_F(f.y))+","+to_string(units.si_F(f.z))+","+to_string(units.si_M(tq.x))+","+to_string(units.si_M(tq.y))+","+to_string(units.si_M(tq.z))+"\n");
+	}
+	lbm.write_status();
+#endif
+} /**/
+
+
+
+/*void main_setup() { // Drone freefall into water pool; required extensions in defines.hpp: FP16S, VOLUME_FORCE, SURFACE, EQUILIBRIUM_BOUNDARIES, INTERACTIVE_GRAPHICS or GRAPHICS
+	// ################################################################## define simulation box size, viscosity and volume force ###################################################################
+
+	// ===== Impact parameters (edit these) =====
+	const float si_u  = 5.0f;  // impact speed [m/s]
+	const float pitch = 0.0f;  // angle of velocity from vertical [°]: 0 = straight down, 90 = purely horizontal
+	const float yaw   = 0.0f;  // azimuth in horizontal plane [°]: 0 = forward (+Y), 90 = right (+X)
+
+	// Velocity components of the drone in the lab frame
+	// pitch/yaw define both the fall direction AND the drone orientation (aligned)
+	const float pitch_rad = pitch * pif / 180.0f;
+	const float yaw_rad   = yaw   * pif / 180.0f;
+	const float si_ux =  si_u * sinf(pitch_rad) * sinf(yaw_rad); // horizontal X
+	const float si_uy =  si_u * sinf(pitch_rad) * cosf(yaw_rad); // horizontal Y (drone forward at pitch=90)
+	const float si_uz = -si_u * cosf(pitch_rad);                  // vertical, negative = downward
+
+	// ===== Physics =====
+	const float si_length = 0.831426f;  // drone characteristic length [m]
+	const float si_T      = 0.5f;       // simulation time [s]
+	const float si_nu     = 1.004e-6f;  // water kinematic viscosity [m²/s]
+	const float si_rho    = 998.2f;     // water density [kg/m³]
+	const float si_sigma  = 0.0728f;    // water-air surface tension [N/m]
+	const float si_g      = 9.81f;      // gravitational acceleration [m/s²]
+
+	// ===== Resolution and unit conversion =====
+	const uint3 lbm_N = resolution(float3(1.0f, 1.0f, 2.0f), 1000u); // square pool, twice as tall as wide (z is up)
+	const float lbm_length = 0.6f * (float)lbm_N.x; // drone size in LBM cells (~60% of pool width)
+	const float lbm_u = 0.075f;
+	units.set_m_kg_s(lbm_length, lbm_u, 1.0f, si_length, si_u, si_rho);
+	const float lbm_nu    = units.nu(si_nu);
+	const float lbm_f     = units.f(si_rho, si_g);
+	const float lbm_sigma = units.sigma(si_sigma);
+	const ulong lbm_T     = units.t(si_T);
+
+	// In the static-drone reference frame the fluid moves opposite to the drone's velocity
+	const float lbm_ux = -lbm_u * si_ux / si_u;
+	const float lbm_uy = -lbm_u * si_uy / si_u;
+	const float lbm_uz = -lbm_u * si_uz / si_u; // positive (upward) because si_uz is negative
+
+	print_info("Re = "+to_string(to_uint(units.si_Re(si_length, si_u, si_nu))));
+	LBM lbm(lbm_N, 1u, 1u, 1u, lbm_nu, 0.0f, 0.0f, -lbm_f, lbm_sigma);
+
+	// ###################################################################################### define geometry ######################################################################################
+
+	// Drone rotation: Y axis is drone forward. Rotating by (pitch-90°) around X tilts forward toward -Z.
+	//   pitch=90 -> horizontal (same as drag sims), pitch=0 -> nose straight down.
+	// Yaw rotates around Z (negative sign to match velocity direction convention above).
+	const float3x3 rotation =
+		float3x3(float3(0,0,1), radians(-yaw)) *
+		float3x3(float3(1,0,0), radians(pitch - 90.0f)) *
+		float3x3(float3(0,0,1), radians(180.0f)); // base flip inherited from drag sim STL orientation
+
+	const float size = lbm_length;
+	const uint water_level = lbm_N.z / 3u; // water fills lower third; air fills upper two-thirds for splash room
+	// Place drone center just at the water surface so impact begins immediately
+	const float3 center = float3(lbm.center().x, lbm.center().y, (float)water_level);
+
+	Clock clock;
+	lbm.voxelize_stl(get_exe_path()+"../stl/Retracted_Props.STL", center, rotation, size, TYPE_S|TYPE_X);
+	println(print_time(clock.stop()));
+
+	const uint Nx=lbm.get_Nx(), Ny=lbm.get_Ny(), Nz=lbm.get_Nz(); parallel_for(lbm.get_N(), [&](ulong n) { uint x=0u, y=0u, z=0u; lbm.coordinates(n, x, y, z);
+		if(z==0u || x==0u||x==Nx-1u||y==0u||y==Ny-1u) {
+			lbm.flags[n] = TYPE_S; // solid pool floor and walls
+		} else if(z==Nz-1u) {
+			if(lbm.flags[n]!=TYPE_S) { lbm.rho[n] = 0.5f; lbm.flags[n] = TYPE_E; } // open top: air can escape
+		} else if(z < water_level) {
+			if(lbm.flags[n]!=TYPE_S) { lbm.flags[n] = TYPE_F; lbm.phi[n] = 1.0f; lbm.u.x[n]=lbm_ux; lbm.u.y[n]=lbm_uy; lbm.u.z[n]=lbm_uz; } // water with impact velocity
+		} else if(z==water_level) {
+			if(lbm.flags[n]!=TYPE_S) { lbm.flags[n] = TYPE_I; lbm.phi[n] = 0.5f; lbm.u.x[n]=lbm_ux; lbm.u.y[n]=lbm_uy; lbm.u.z[n]=lbm_uz; } // free surface interface
+		}
+		// air cells (z > water_level): left as default empty
+	}); // ####################################################################### run simulation, export images and data ##########################################################################
+	lbm.graphics.visualization_modes = VIS_PHI_RASTERIZE|VIS_FLAG_SURFACE;
+	const float3 com = lbm.object_center_of_mass(TYPE_S|TYPE_X);
+	char csv_speed_buf[32]; sprintf(csv_speed_buf, "%g", si_u);
+	const string csv = get_exe_path()+"export/rb_freefall_"+replace(string(csv_speed_buf), ".", "_")+"m_s.csv";
+	write_file(csv, "step,si_time,pos_x,pos_y,pos_z,vel_x,vel_y,vel_z,pitch_deg,yaw_deg,force_x,force_y,force_z,torque_x,torque_y,torque_z\n");
+	// pos [m]: drone center of mass (fixed in LBM frame, records pool-relative entry point)
+	// vel [m/s]: freefall velocity components (constant in this reference frame)
+	// pitch_deg/yaw_deg [°]: drone orientation
+	// force [N], torque [N*m]: fluid loads on drone
+	const string state_prefix = // constant per run: position, velocity, orientation
+		to_string(units.si_x(com.x))+","+to_string(units.si_x(com.y))+","+to_string(units.si_x(com.z))+","+
+		to_string(si_ux)+","+to_string(si_uy)+","+to_string(si_uz)+","+
+		to_string(pitch)+","+to_string(yaw)+",";
+#if defined(INTERACTIVE_GRAPHICS) || defined(INTERACTIVE_GRAPHICS_ASCII)
+	lbm.write_status();
+	lbm.run();
+	lbm.write_status();
+#elif defined(GRAPHICS)
+	lbm.write_status();
+	lbm.run(0u, lbm_T);
+	while(lbm.get_t()<=lbm_T) {
+		if(lbm.graphics.next_frame(lbm_T, 30.0f)) lbm.graphics.write_frame();
+		lbm.run(1u, lbm_T);
+		const float3 f = lbm.object_force(TYPE_S|TYPE_X);
+		const float3 tq = lbm.object_torque(com, TYPE_S|TYPE_X);
+		write_line(csv, to_string(lbm.get_t())+","+to_string(units.si_t(lbm.get_t()))+","+state_prefix+to_string(units.si_F(f.x))+","+to_string(units.si_F(f.y))+","+to_string(units.si_F(f.z))+","+to_string(units.si_M(tq.x))+","+to_string(units.si_M(tq.y))+","+to_string(units.si_M(tq.z))+"\n");
+	}
+	lbm.write_status();
+#else // no graphics: log without rendering
+	lbm.run(0u, lbm_T);
+	while(lbm.get_t()<=lbm_T) {
+		lbm.run(1u, lbm_T);
+		const float3 f = lbm.object_force(TYPE_S|TYPE_X);
+		const float3 tq = lbm.object_torque(com, TYPE_S|TYPE_X);
+		write_line(csv, to_string(lbm.get_t())+","+to_string(units.si_t(lbm.get_t()))+","+state_prefix+to_string(units.si_F(f.x))+","+to_string(units.si_F(f.y))+","+to_string(units.si_F(f.z))+","+to_string(units.si_M(tq.x))+","+to_string(units.si_M(tq.y))+","+to_string(units.si_M(tq.z))+"\n");
+	}
+	lbm.write_status();
+#endif
+} /**/
+
+
+
+/*void main_setup() { // Drone freefall into water pool - 6 DOF rigid body; required extensions in defines.hpp: FP16S, VOLUME_FORCE, SURFACE, EQUILIBRIUM_BOUNDARIES, INTERACTIVE_GRAPHICS or GRAPHICS
+	// ################################################################## define simulation box size, viscosity and volume force ###################################################################
+
+	// ===== Impact and rigid body parameters (edit these) =====
+	const float si_u    = 5.0f;   // initial impact speed [m/s]
+	const float pitch   = 0.0f;   // initial pitch [°]: angle of velocity from vertical (0=straight down, 90=horizontal)
+	const float yaw     = 0.0f;   // initial yaw [°]: azimuth in horizontal plane (0=+Y forward, 90=+X)
+	const float si_mass = 1.5f;   // drone mass [kg]
+	// Inertia tensor in body frame [kg·m²], defined at CoM, symmetric:
+	//   | Ixx  Ixy  Ixz |
+	//   | Ixy  Iyy  Iyz |
+	//   | Ixz  Iyz  Izz |
+	const float si_Ixx=0.02f, si_Iyy=0.02f, si_Izz=0.04f; // principal diagonal
+	const float si_Ixy=0.0f,  si_Ixz=0.0f,  si_Iyz=0.0f;  // off-diagonal (products of inertia)
+	const uint  N_rb = 10u; // LBM steps per rigid body integration step (increase to reduce re-voxelization cost)
+
+	// ===== Physics =====
+	const float si_length = 0.831426f;
+	const float si_T      = 1.0f;
+	const float si_nu     = 1.004e-6f;
+	const float si_rho    = 998.2f;
+	const float si_sigma  = 0.0728f;
+	const float si_g      = 9.81f;
+
+	// ===== Resolution and unit conversion =====
+	const uint3 lbm_N = resolution(float3(1.0f, 1.0f, 2.0f), 1000u);
+	const float lbm_length = 0.6f*(float)lbm_N.x;
+	const float lbm_u = 0.075f;
+	units.set_m_kg_s(lbm_length, lbm_u, 1.0f, si_length, si_u, si_rho);
+	const float lbm_nu    = units.nu(si_nu);
+	const float lbm_f     = units.f(si_rho, si_g);
+	const float lbm_g     = units.g(si_g);
+	const float lbm_sigma = units.sigma(si_sigma);
+	const ulong lbm_T     = units.t(si_T);
+
+	// ===== Rigid body LBM quantities =====
+	const float lbm_mass = units.m(si_mass);
+	const float I_scale  = units.m(1.0f)*sq(units.x(1.0f)); // [kg·m²] → LBM inertia units
+	const float3x3 I_body(
+		si_Ixx*I_scale, si_Ixy*I_scale, si_Ixz*I_scale,
+		si_Ixy*I_scale, si_Iyy*I_scale, si_Iyz*I_scale,
+		si_Ixz*I_scale, si_Iyz*I_scale, si_Izz*I_scale
+	);
+	// Analytic inverse of the symmetric 3×3 inertia tensor
+	const float Ia=I_body.xx, Ib=I_body.xy, Ic=I_body.xz, Id=I_body.yy, Ie=I_body.yz, If=I_body.zz;
+	const float idet = 1.0f/(Ia*(Id*If-Ie*Ie) - Ib*(Ib*If-Ie*Ic) + Ic*(Ib*Ie-Id*Ic));
+	const float3x3 I_body_inv(
+		(Id*If-Ie*Ie)*idet, (Ic*Ie-Ib*If)*idet, (Ib*Ie-Id*Ic)*idet,
+		(Ic*Ie-Ib*If)*idet, (Ia*If-Ic*Ic)*idet, (Ib*Ic-Ia*Ie)*idet,
+		(Ib*Ie-Id*Ic)*idet, (Ib*Ic-Ia*Ie)*idet, (Ia*Id-Ib*Ib)*idet
+	);
+
+	// ===== Initial 6 DOF state =====
+	// Rotation matrix R maps body frame → world frame.
+	// Drone forward is +Y in body frame; pitch/yaw give the initial fall direction.
+	const float pitch_rad = pitch*pif/180.0f, yaw_rad = yaw*pif/180.0f;
+	float3x3 R =
+		float3x3(float3(0,0,1), radians(-yaw)) *
+		float3x3(float3(1,0,0), radians(pitch - 90.0f)) *
+		float3x3(float3(0,0,1), radians(180.0f)); // base flip from drag-sim STL orientation
+	float3 vel( // linear velocity in LBM units, world frame (lab frame: drone moves, fluid at rest)
+		lbm_u*sinf(pitch_rad)*sinf(yaw_rad),
+		lbm_u*sinf(pitch_rad)*cosf(yaw_rad),
+	   -lbm_u*cosf(pitch_rad)
+	);
+	float3 omega(0.0f, 0.0f, 0.0f); // angular velocity in LBM units, world frame
+
+	// Helper: transpose of float3x3 (not built-in)
+	auto T3 = [](const float3x3& m) {
+		return float3x3(m.xx,m.yx,m.zx, m.xy,m.yy,m.zy, m.xz,m.yz,m.zz);
+	};
+
+	// ###################################################################################### define geometry ######################################################################################
+	const float size = lbm_length;
+	const uint water_level = lbm_N.z/3u; // water fills lower third; upper two-thirds for splash
+
+	LBM lbm(lbm_N, 1u, 1u, 1u, lbm_nu, 0.0f, 0.0f, -lbm_f, lbm_sigma);
+
+	// Load mesh with initial orientation; place CoM at water surface
+	Mesh* mesh = read_stl(get_exe_path()+"../stl/Retracted_Props.STL",
+		lbm.size(), float3(lbm.center().x, lbm.center().y, (float)water_level), R, size);
+	mesh->set_center(mesh->get_center_of_mass()); // rotations must pivot around physical CoM
+
+	const uint Nx=lbm.get_Nx(), Ny=lbm.get_Ny(), Nz=lbm.get_Nz(); parallel_for(lbm.get_N(), [&](ulong n) { uint x=0u, y=0u, z=0u; lbm.coordinates(n, x, y, z);
+		if(z==0u||x==0u||x==Nx-1u||y==0u||y==Ny-1u) {
+			lbm.flags[n] = TYPE_S; // solid pool floor and walls
+		} else if(z==Nz-1u) {
+			if(lbm.flags[n]!=TYPE_S) { lbm.rho[n]=0.5f; lbm.flags[n]=TYPE_E; } // open top
+		} else if(z<water_level) {
+			if(lbm.flags[n]!=TYPE_S) { lbm.flags[n]=TYPE_F; lbm.phi[n]=1.0f; } // water at rest
+		} else if(z==water_level) {
+			if(lbm.flags[n]!=TYPE_S) { lbm.flags[n]=TYPE_I; lbm.phi[n]=0.5f; } // free surface
+		}
+	}); // ####################################################################### run simulation, export images and data ##########################################################################
+
+	// Initial voxelization: drone at starting position with initial velocity
+	lbm.voxelize_mesh_on_device(mesh, TYPE_S|TYPE_X, mesh->center, vel, omega);
+	lbm.update_moving_boundaries();
+
+	// ===== CSV logging =====
+	lbm.graphics.visualization_modes = VIS_PHI_RASTERIZE|VIS_FLAG_SURFACE;
+	char csv_speed_buf[32]; sprintf(csv_speed_buf, "%g", si_u);
+	const string csv = get_exe_path()+"export/rb_freefall6dof_"+replace(string(csv_speed_buf), ".", "_")+"m_s.csv";
+	write_file(csv, "step,si_time,"
+		"pos_x,pos_y,pos_z,"          // CoM position [m]
+		"vel_x,vel_y,vel_z,"          // linear velocity [m/s]
+		"fwd_x,fwd_y,fwd_z,"          // drone forward axis in world frame (drone Y-axis)
+		"omega_x,omega_y,omega_z,"    // angular velocity [rad/s]
+		"force_x,force_y,force_z,"    // fluid force [N]
+		"torque_x,torque_y,torque_z\n"); // fluid torque [N·m]
+
+	// ===== Integration loop =====
+	float3 F_accum(0.0f,0.0f,0.0f), T_accum(0.0f,0.0f,0.0f);
+	float3 com_lbm = float3(mesh->get_center_of_mass());
+	const float omega_si_scale = units.si_u(1.0f)/units.si_x(1.0f); // [rad/step] → [rad/s]
+#if defined(INTERACTIVE_GRAPHICS) || defined(INTERACTIVE_GRAPHICS_ASCII)
+	lbm.write_status();
+	lbm.run();
+	lbm.write_status();
+#else
+	lbm.write_status();
+	lbm.run(0u, lbm_T);
+	while(lbm.get_t()<=lbm_T) {
+#if defined(GRAPHICS)
+		if(lbm.graphics.next_frame(lbm_T, 30.0f)) lbm.graphics.write_frame();
+#endif
+		lbm.run(1u, lbm_T);
+		F_accum += lbm.object_force(TYPE_S|TYPE_X);
+		T_accum += lbm.object_torque(com_lbm, TYPE_S|TYPE_X);
+
+		if(lbm.get_t()%N_rb==0u) {
+			const float dt = (float)N_rb;
+			const float3 F_fluid = F_accum/dt;
+			const float3 T_fluid = T_accum/dt;
+			F_accum = T_accum = float3(0.0f,0.0f,0.0f);
+
+			// --- Linear integration (velocity Verlet) ---
+			const float3 a = (F_fluid + float3(0.0f,0.0f,-lbm_mass*lbm_g)) / lbm_mass;
+			const float3 delta_pos = vel*dt + 0.5f*a*sq(dt);
+			vel += a*dt;
+
+			// --- Angular integration (world-frame Euler equations) ---
+			const float3x3 RT = T3(R);
+			const float3x3 I_world     = R*I_body    *RT; // world-frame inertia tensor
+			const float3x3 I_world_inv = R*I_body_inv*RT; // world-frame inverse
+			const float3 alpha = I_world_inv*(T_fluid - cross(omega, I_world*omega));
+			const float3 theta = omega*dt + 0.5f*alpha*sq(dt); // incremental rotation vector
+			const float theta_mag = length(theta);
+			const float3x3 delta_R = theta_mag>1e-8f ? float3x3(theta/theta_mag, theta_mag) : float3x3(1.0f);
+			omega += alpha*dt;
+
+			// --- Update orientation matrix and re-orthogonalize (Gram-Schmidt) ---
+			R = delta_R*R;
+			const float3 c0 = normalize(float3(R.xx, R.yx, R.zx));
+			const float3 c1_raw = float3(R.xy, R.yy, R.zy);
+			const float3 c1 = normalize(c1_raw - dot(c1_raw, c0)*c0);
+			const float3 c2 = cross(c0, c1);
+			R = float3x3(c0, c1, c2);
+
+			// --- Re-voxelize mesh at new position/orientation ---
+			lbm.unvoxelize_mesh_on_device(mesh, TYPE_S|TYPE_X);
+			mesh->rotate(delta_R);
+			mesh->translate(delta_pos);
+			com_lbm = float3(mesh->get_center_of_mass());
+			lbm.voxelize_mesh_on_device(mesh, TYPE_S|TYPE_X, com_lbm, vel, omega);
+			lbm.update_moving_boundaries();
+
+			// --- Log state ---
+			const float3 fwd(R.xy, R.yy, R.zy); // drone's Y-axis (forward) in world frame
+			write_line(csv,
+				to_string(lbm.get_t())+","+to_string(units.si_t(lbm.get_t()))+","+
+				to_string(units.si_x(com_lbm.x))+","+to_string(units.si_x(com_lbm.y))+","+to_string(units.si_x(com_lbm.z))+","+
+				to_string(units.si_u(vel.x))+","+to_string(units.si_u(vel.y))+","+to_string(units.si_u(vel.z))+","+
+				to_string(fwd.x)+","+to_string(fwd.y)+","+to_string(fwd.z)+","+
+				to_string(omega.x*omega_si_scale)+","+to_string(omega.y*omega_si_scale)+","+to_string(omega.z*omega_si_scale)+","+
+				to_string(units.si_F(F_fluid.x))+","+to_string(units.si_F(F_fluid.y))+","+to_string(units.si_F(F_fluid.z))+","+
+				to_string(units.si_M(T_fluid.x))+","+to_string(units.si_M(T_fluid.y))+","+to_string(units.si_M(T_fluid.z))+"\n"
+			);
+		}
 	}
 	lbm.write_status();
 #endif
