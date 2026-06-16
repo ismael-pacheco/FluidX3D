@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """
 Barrido esférico automatizado para el estudio de arrastre del dron en FluidX3D.
-
+Es importante compilar con ./make.sh con la función main para el barrido antes de ejecutar este script
 Genera una malla de orientaciones (elevación, azimut) sobre la esfera de
-direcciones de flujo, corre el binario de FluidX3D una vez por orientación
-(SIN recompilar — requiere el setup.cpp parametrizado, ver setup_patch.md),
+direcciones de flujo, corre el binario de FluidX3D una vez por orientación,
 y organiza los CSV resultantes en carpetas etiquetadas.
 
 Explota la simetría del cuerpo:
   - simetría especular izquierda-derecha -> azimut solo 0..180 (el resto es espejo)
-  - asimetría proa-popa                  -> elevación completa -90..90
+  - asimetría Frente-Reverso                  -> elevación completa -90..90
+  Esto va a variar según la geometría de tu dron
 
 Uso:
     python3 run_sweep.py --step 15 --exe ./bin/FluidX3D --outdir Sphere
-    python3 run_sweep.py --step 10 --resume     # continúa, salta casos ya hechos
-
-Tras correr, post-procesa con fit_sphere.py para obtener Cd*A(elev, azim).
+    python3 run_sweep.py --step 15 --exe ./bin/FluidX3D --outdir Sphere --angles-file bin/sweep_angles.txt --resume     # continúa, salta casos ya hechos
+    
+   
 """
 
 import argparse
@@ -34,10 +34,10 @@ def build_orientations(step):
     Simetría explotada:
       - espejo izquierda-derecha -> azimut 0..180 (el resto es espejo)
 
-    Elevación COMPLETA -90..90: la asimetría proa-popa del cuerpo (~10%, medida
-    en el barrido de yaw) vive en el signo de la elevación. +elev pone el morro
+    Elevación COMPLETA -90..90: la asimetría frente-reverso del cuerpo (~10%, medida
+    en el barrido de yaw) vive en el signo de la elevación. +elev pone la "nariz"
     a favor del flujo, -elev en contra, y dan Cd*A distintos. Por eso NO se
-    reduce a 0..90 — la simetría arriba-abajo del cuerpo no intercambia proa-popa.
+    reduce a 0..90 — la simetría arriba-abajo del cuerpo no intercambia frente-reverso.
 
     (Verificar con (90,90) vs (-90,90): si difieren ~10%, este dominio es el
     correcto; si coinciden, puede reducirse a elev 0..90.)"""
