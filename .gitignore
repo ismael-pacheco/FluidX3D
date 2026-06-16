@@ -1,6 +1,8 @@
 bin/
 temp/
 .vs/
+Sphere/
 FluidX3D.vcxproj.user
 *.png
 *.mp4
+*.csv
